@@ -37,8 +37,8 @@ var verbose = false, fStartTask;
 
 if (~bo.isNil) { "Utopa setup not loaded!".warn };
 
-SetMIDIOutMultiple.new([ [\MUL,0], [\MSP, 0], [\MSP, 1] ]);
-~mpk = GetMIDIInIds.new()[\MSP].uid[1];
+SetMIDIOutMultiple.new([ [\MUL,0], [\MSP, 0] ]);
+~mpk = GetMIDIInIds.new()[\LPK].uid[0];
 
 fStartTask = {
 	arg index, val;
