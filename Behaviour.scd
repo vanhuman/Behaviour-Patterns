@@ -11,9 +11,9 @@
 // // ------------ Baroque Organ Setup ------------
 // if(~bo.notNil, { ~bo.clearAll() });
 // ~bo = EM(); // functions in an EM always have the environment as first argument
-// ~bo.addr = NetAddrMon.new("192.168.0.1", 1803);
-// // ~bo.addr = NetAddrMon.new("127.0.0.1", 8000);
-//
+// // ~bo.addr = NetAddrMon.new("192.168.0.1", 1803);
+// ~bo.addr = NetAddrMon.new("127.0.0.1", 8000);
+// ~bo.currentDir = Document.current.dir;
 // ~bo.noteOffset = 0;
 // ~bo.chanOffset = 0;
 // ~bo.upperRange = 85; // not sounding from 86 - 92
@@ -33,11 +33,13 @@ var taskLabels = [
 var envs = Array.newClear(taskKeys.size);
 var tasks = Array.newClear(taskKeys.size);
 var tasksRunning = false!(taskKeys.size);
-var verbose = false, fStartTask;
+var verbose = false, fStartTask, overrideOutputChans;
 
 if (~bo.isNil) { "Utopa setup not loaded!".warn };
 
 SetMIDIOutMultiple.new([ [\MUL,0], [\MSP, 0] ]);
+// SetMIDIOutMultiple.new([ [\IAC,0], [\IAC, 2] ]);
+overrideOutputChans = [nil, 0]; // if nil there is no override, otherwise use the channel indicated
 ~mpk = GetMIDIInIds.new()[\LPK].uid[0];
 
 fStartTask = {
@@ -95,23 +97,35 @@ MIDIdef.cc(\organCCcontrol5, {
 
 playnote = {
 	arg chans, notes, vel, dur = 0, delay = 0;
+	var numberOfChannels, channel;
 	if (~verbose) { format("Chan %, note %, duration % sec", chans, notes, dur.round(0.01)).postln };
-	chans.size.do {|index|
-		// { ~bo.midinote(chans[index], notes[index], vel) }.defer(delay);
-		{
-			~midiOut.do { arg midiOut;
-				midiOut.noteOn(chans[index], notes[index], vel);
-			}
-		}.defer(delay);
-		if (dur > 0) {
-			// { ~bo.midinote(chans[index], notes[index], 0) }.defer(dur + delay);
-			{
-				~midiOut.do { arg midiOut;
-					midiOut.noteOn(chans[index], notes[index], 0);
-				}
-			}.defer(dur + delay);
+	{
+		// OSC
+		if (~bo.notNil) {
+			chans.size.do {|index|
+				{ ~bo.midinote(chans[index], notes[index], vel) }.defer(delay);
+				if (dur > 0) {
+					{ ~bo.midinote(chans[index], notes[index], 0) }.defer(dur + delay);
+				};
+			};
 		};
-	};
+		// MIDI
+		~midiOut.do { arg midiOut, outIndex;
+			if (overrideOutputChans[outIndex].notNil) { numberOfChannels = 1 } { numberOfChannels = chans.size };
+			numberOfChannels.do {|index|
+				{
+					if (overrideOutputChans[outIndex].notNil) { channel = overrideOutputChans[outIndex] } { channel=chans[index] };
+					midiOut.noteOn(channel, notes[index], vel);
+				}.defer(delay);
+				if (dur > 0) {
+					{
+						if (overrideOutputChans[outIndex].notNil) { channel = overrideOutputChans[outIndex] } { channel=chans[index] };
+						midiOut.noteOn(channel, notes[index], 0);
+					}.defer(dur + delay);
+				};
+			};
+		};
+	}.defer();
 };
 
 taskfunc = {
